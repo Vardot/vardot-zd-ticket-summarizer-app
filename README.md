@@ -24,5 +24,5 @@ Once installed, the Vardot Zendesk Ticket Summarizer App will appear in your Zen
 This project is licensed under the MIT License.
 
 ## Credits
-- Mohammed Razem
+- Mohammed Razem (m.razem@vardot.com)
 - Zendesk AI's Guide (https://developer.zendesk.com/documentation/apps/build-an-app/using-ai-to-summarize-conversations-in-a-support-app/)
