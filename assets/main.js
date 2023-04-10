@@ -1,55 +1,113 @@
 const client = ZAFClient.init();
-
-async function updateSummary() {
-  const convo = await getTicketConvo();
-  const prompt = await getPrompt(convo);
-  const summary = await getSummary(prompt);
-  const container = document.getElementById("container");
-
-  container.innerHTML = summary;
-}
-
-async function getTicketConvo() {
-  const ticketConvo = await client.get("ticket.conversation");
-  return JSON.stringify(ticketConvo["ticket.conversation"]);
-}
-
-async function getPrompt(convo) {
-  return `
-Summarize the following customer service interaction.
+const TEMPLATE_INITIAL_PROMPT = `Summarize the following customer service interaction.
 Detect the customer's sentiment. And extract any key information such as technologies, products, and critical dates as tags.
 Display the outcome in the following main headers as h5 HTML tags, and Key Information as HTML lists.
 - Summary
-- Customer sentiment
-- Key Information
+- Customer Sentiment
+- Key Information`;
+
+async function updateSummary() {
+  // Show the div#container and display loading text
+  container.style.display = "block";
+  container.innerHTML = "Loading the ticket summary...";
+
+  try {
+    const convo = await getTicketConvo();
+    const prompt = await getPrompt(convo);
+    const summary = await getSummary(prompt);
+    const container = document.getElementById("container");
+
+    container.innerHTML = summary;
+  } catch (error) {
+    container.innerHTML = `An error occured: ${JSON.stringify(error)}`;
+  }
+}
+
+async function getTicketConvo() {
+  try {
+    const ticketConvo = await client.get("ticket.conversation");
+    let filteredConvo = ticketConvo["ticket.conversation"];
+
+    // @todo, turn this into a setting to work from setting.excludeInternalConvo param
+    if (true) {
+      filteredConvo = filteredConvo.filter((conversation) => conversation.channel.name !== "internal");
+    }
+
+    // Check if either setting.excludeAgentsConvo is true or input#exclude-agent is checked
+    const excludeAgentCheckbox = document.getElementById("exclude-agent");
+    // @todo, turn this into a setting to work from setting.excludeInternalConvo param
+    if (excludeAgentCheckbox.checked) {
+      filteredConvo = filteredConvo.filter((conversation) => conversation.author.role === "end-user");
+    }
+
+    // Remove unwanted details in object to reduce OpenAI API tokens
+    const cleanedConvo = cleanTicketConvoData(filteredConvo);
+    return JSON.stringify(cleanedConvo);
+  } catch (error) {
+    console.log(`An error occured: ${JSON.stringify(error)}`);
+  }
+}
+
+async function getPrompt(convo) {
+  return `${TEMPLATE_INITIAL_PROMPT}
 
 ${convo}`;
 }
 
-async function getSummary(prompt) {
-  const options = {
-    url: "https://api.openai.com/v1/chat/completions",
-    type: "POST",
-    contentType: "application/json",
-    headers: {
-      Authorization: "Bearer {{setting.openAiApiToken}}",
-    },
-    data: JSON.stringify({
-      model: "gpt-3.5-turbo",
-      messages: [{ role: "user", content: prompt }],
-    }),
-    secure: true,
-  };
-  const response = await client.request(options);
+function cleanTicketConvoData(rawData) {
+  return rawData.map(conversation => {
+    const { author, channel, ...remainingConversation } = conversation;
+    const { id, avatar, ...remainingAuthor } = author;
+    const { contentType, ...remainingMessage } = remainingConversation.message;
 
-  return response.choices[0].message.content.trim();
+    return {
+      ...remainingConversation,
+      author: remainingAuthor,
+      message: remainingMessage
+    };
+  });
 }
 
-client.on("app.registered", () => {
+async function getSummary(prompt) {
+  try {
+    const options = {
+      url: "https://api.openai.com/v1/chat/completions",
+      type: "POST",
+      contentType: "application/json",
+      headers: {
+        Authorization: "Bearer {{setting.openAiApiToken}}",
+      },
+      data: JSON.stringify({
+        model: "gpt-3.5-turbo",
+        messages: [{ role: "user", content: prompt }],
+      }),
+      secure: true,
+    };
+    const response = await client.request(options);
+
+    return response.choices[0].message.content.trim();
+  } catch (error) {
+    console.error(JSON.stringify(error));
+    throw error;
+  }
+}
+
+
+// Event listener for the button click
+document.getElementById("ticket_summarizer-get-summary").addEventListener("click", async (event) => {
+  event.target.classList.add("is-disabled");
+  const label = document.querySelector(".exclude-agent-label");
+  label.classList.add("is-disabled");
+
+  await updateSummary();
+
   client.invoke("resize", { width: "100%", height: "400px" });
-  updateSummary();
+  event.target.classList.remove("is-disabled");
+  label.classList.remove("is-disabled");
+
 });
 
 client.on("ticket.conversation.changed", () => {
-  updateSummary();
+  const container = document.getElementById("container");
+  container.innerHTML = "Conversation changed. Click to regenerate the summary with the new changes.";
 });
