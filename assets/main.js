@@ -11,10 +11,11 @@ async function updateSummary() {
   container.style.display = "block";
   container.innerHTML = "Loading the ticket summary...";
 
+  // UI elements to work with
+  const button = document.querySelector("#ticket_summarizer-get-summary");
+  const label = document.querySelector(".exclude-agent-label");
+
   try {
-    // Disable button
-    const button = document.querySelector("#ticket_summarizer-get-summary");
-    const label = document.querySelector(".exclude-agent-label");
     button.classList.add("is-disabled");
     label.classList.add("is-disabled");
 
@@ -35,8 +36,8 @@ async function updateSummary() {
 
     // Re-enable button
     client.invoke("resize", { width: "100%", height: "400px" });
-    event.target.classList.remove("is-disabled");
-    label.classList.remove("is-disabled");
+    button.classList.add("is-disabled");
+    label.classList.add("is-disabled");
   }
 }
 
